@@ -1,11 +1,15 @@
 #!/bin/bash
-set -u
+set -e
 
 echo "Setting up Container Fundamentals environment..."
 
+echo "Installing additional tools (vim, neovim, ncat)..."
+sudo apt-get update -qq
+sudo apt-get install -y vim neovim ncat
+
 echo "Verifying Docker..."
 docker_ready=0
-for _ in $(seq 1 60); do
+for _ in $(seq 1 30); do
   if docker info >/dev/null 2>&1; then
     docker_ready=1
     break
