@@ -58,6 +58,16 @@ def student():
         "container_tag": "v2-student"
     }
 
+@app.route("/info")
+def info():
+    return {
+        "app": "my-python-app",
+        "version": "v2-student",
+        "author": STUDENT_NAME,
+        "features": ["health-check", "student-info", "environment-config"]
+    }
+ 
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"Starting server on port {port}...")
