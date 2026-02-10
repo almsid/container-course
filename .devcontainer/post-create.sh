@@ -45,6 +45,13 @@ sudo install -m 755 ./cloudflared /usr/local/bin/cloudflared
 rm ./cloudflared
 cloudflared version
 
+echo "Installing kubelogin (kubectl oidc-login plugin)..."
+KUBELOGIN_VERSION=$(curl -fsSL https://api.github.com/repos/int128/kubelogin/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -fsSLo ./kubelogin.zip "https://github.com/int128/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin_linux_amd64.zip"
+unzip -q ./kubelogin.zip
+sudo install -m 755 ./kubelogin /usr/local/bin/kubectl-oidc_login
+rm -f ./kubelogin ./kubelogin.zip ./LICENSE
+
 # --- Week 05: Secret management tools ---
 
 echo "Installing SOPS..."
@@ -82,6 +89,7 @@ echo "  age:      $(age --version 2>/dev/null)"
 echo "  kubeseal: $(kubeseal --version 2>/dev/null)"
 echo "  vault:    $(vault version 2>/dev/null)"
 echo "  cloudflared: $(cloudflared version 2>/dev/null | head -1)"
+echo "  kubelogin: $(kubectl-oidc_login --version 2>/dev/null | head -1)"
 echo ""
 echo "Quick verification:"
 echo "  docker run hello-world"

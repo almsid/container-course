@@ -98,12 +98,20 @@ kubectl get all --all-namespaces
 
 **Get more detail:**
 
+`kubectl get` supports many output formats beyond the default table. Take 5 minutes to skim the [`kubectl get` reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_get/) — look at the `--output` flag and the list of formats (`wide`, `yaml`, `json`, `jsonpath`, `custom-columns`, etc.). You'll use these constantly.
+
 ```bash
 # Wide output shows node placement and IPs
 kubectl get pods -n kube-system -o wide
 
 # Full YAML representation of any resource
 kubectl get pod -n kube-system etcd-lab-control-plane -o yaml
+
+# Just the names — useful for scripting
+kubectl get pods -n kube-system -o name
+
+# Pull a specific field with jsonpath
+kubectl get pod -n kube-system etcd-lab-control-plane -o jsonpath='{.status.phase}'
 ```
 
 ### The API Resources
@@ -114,18 +122,18 @@ Kubernetes has dozens of resource types. See them all:
 kubectl api-resources
 ```
 
-For now, the ones that matter are:
+For now, the ones that matter are. Click through to the docs for each — you don't need to memorize them, but knowing where to look is half the job:
 
 | Resource | Short Name | What It Does |
 |----------|-----------|-------------|
-| pods | po | Smallest runnable unit |
-| deployments | deploy | Manages replica sets of pods |
-| services | svc | Stable network endpoints |
-| replicasets | rs | Ensures N pod copies exist |
-| namespaces | ns | Virtual cluster partitions |
-| configmaps | cm | Configuration data |
-| secrets | — | Sensitive configuration data |
-| events | ev | Log of what happened in the cluster |
+| [pods](https://kubernetes.io/docs/concepts/workloads/pods/) | po | Smallest runnable unit |
+| [deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) | deploy | Manages replica sets of pods |
+| [services](https://kubernetes.io/docs/concepts/services-networking/service/) | svc | Stable network endpoints |
+| [replicasets](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/) | rs | Ensures N pod copies exist |
+| [namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) | ns | Virtual cluster partitions |
+| [configmaps](https://kubernetes.io/docs/concepts/configuration/configmap/) | cm | Configuration data |
+| [secrets](https://kubernetes.io/docs/concepts/configuration/secret/) | — | Sensitive configuration data |
+| [events](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/event-v1/) | ev | Log of what happened in the cluster |
 
 ### Practice: Explore the Cluster
 
@@ -155,26 +163,55 @@ It's time to find out.
 
 ### Connect to the Shared Cluster
 
-Your instructor will provide connection details. Set up the context:
+The shared cluster's Kubernetes API is exposed through a Cloudflare Tunnel. You'll use `cloudflared` to create a local TCP proxy and `kubelogin` (already installed in the devcontainer) to authenticate via GitHub.
+
+**Start the tunnel proxy** (in a separate terminal, or background it):
 
 ```bash
-# Your instructor will provide this command or file
-export KUBECONFIG=~/.kube/shared-config
+cloudflared access tcp --hostname kube.lab.shart.cloud --url localhost:6443 &
 ```
 
-Or if your instructor gave you a direct command:
+A browser window will open for Cloudflare Access authentication. Sign in with your GitHub account.
+
+**Add the shared cluster context** to your kubeconfig (one-time setup):
 
 ```bash
-# Example — your instructor will provide the actual command
-kubectl --kubeconfig ~/.kube/shared-config get nodes
+# Add the cluster (points at the local cloudflared proxy)
+kubectl config set-cluster ziyotek-prod \
+  --server=https://localhost:6443 \
+  --insecure-skip-tls-verify=true
+
+# Add OIDC credentials (uses kubelogin for browser-based GitHub login)
+kubectl config set-credentials oidc \
+  --exec-api-version=client.authentication.k8s.io/v1beta1 \
+  --exec-command=kubectl \
+  --exec-arg=oidc-login \
+  --exec-arg=get-token \
+  --exec-arg=--oidc-issuer-url=https://argocd.lab.shart.cloud/api/dex \
+  --exec-arg=--oidc-client-id=kubernetes \
+  --exec-arg=--oidc-client-secret=hprtOl5JG85iadQL8AzCSkAdM15tRjZR \
+  --exec-arg=--oidc-extra-scope=email \
+  --exec-arg=--oidc-extra-scope=groups \
+  --exec-arg=--oidc-extra-scope=profile \
+  --exec-arg=--listen-address=localhost:8000
+
+# Create a context that ties the cluster and credentials together
+kubectl config set-context ziyotek-prod \
+  --cluster=ziyotek-prod \
+  --user=oidc
 ```
+
+**Switch to the shared cluster:**
+
+```bash
+kubectl config use-context ziyotek-prod
+```
+
+The first `kubectl` command will open a browser window for GitHub OIDC login. After authenticating, the token is cached.
 
 ### See Your Apps
 
 ```bash
-# Switch context to the shared cluster
-kubectl config use-context shared-cluster  # name may vary
-
 # List the namespaces — look for container-course-week01
 kubectl get namespaces | grep container
 
@@ -214,11 +251,15 @@ For the rest of today's labs, we work on your local kind cluster:
 kubectl config use-context kind-lab
 ```
 
-> **Tip:** You can always check which cluster you're talking to:
+> **Managing multiple contexts:** You now have two contexts in your kubeconfig — `kind-lab` (local) and `ziyotek-prod` (shared cluster). You can list them anytime:
+> ```bash
+> kubectl config get-contexts
+> ```
+> The `*` marks your active context. Always check which cluster you're talking to before running commands:
 > ```bash
 > kubectl config current-context
 > ```
-> This becomes critical when you have two clusters. Accidentally running `kubectl delete` on the wrong context is a real-world mistake that ruins someone's day.
+> Accidentally running `kubectl delete` on the wrong context is a real-world mistake that ruins someone's day.
 
 ---
 
