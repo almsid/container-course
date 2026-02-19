@@ -81,34 +81,29 @@ Write these down. You'll use them in every etcdctl command for the rest of this 
 
 ## Part 2: Take a Snapshot
 
-Create a backup directory inside the etcd pod and snapshot:
+The etcd container image is distroless — it contains only `etcdctl` and `etcd`, no shell or standard utilities. Save the snapshot directly into `/var/lib/etcd/`, which already exists as a mounted volume:
 
 ```bash
-kubectl -n kube-system exec "$ETCD_POD" -- mkdir -p /var/lib/etcd-backups
-
-kubectl -n kube-system exec "$ETCD_POD" -- sh -c '
-ETCDCTL_API=3 etcdctl \
+kubectl -n kube-system exec "$ETCD_POD" -- etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
   --key=/etc/kubernetes/pki/etcd/server.key \
-  snapshot save /var/lib/etcd-backups/snapshot.db
-'
+  snapshot save /var/lib/etcd/snapshot.db
 ```
 
 Validate snapshot metadata:
 
 ```bash
-kubectl -n kube-system exec "$ETCD_POD" -- sh -c '
-ETCDCTL_API=3 etcdctl snapshot status /var/lib/etcd-backups/snapshot.db -w table
-'
+kubectl -n kube-system exec "$ETCD_POD" -- etcdctl \
+  snapshot status /var/lib/etcd/snapshot.db -w table
 ```
 
 Copy snapshot locally as evidence:
 
 ```bash
 mkdir -p ./artifacts
-kubectl -n kube-system cp "${ETCD_POD}:/var/lib/etcd-backups/snapshot.db" ./artifacts/snapshot.db
+kubectl -n kube-system cp "${ETCD_POD}:/var/lib/etcd/snapshot.db" ./artifacts/snapshot.db
 ls -lh ./artifacts/snapshot.db
 ```
 
@@ -129,20 +124,19 @@ Expected now: `after-snapshot`.
 
 ## Part 4: Rehearse Restore (Non-Destructive)
 
-Restore into an alternate data directory inside the etcd pod:
+Restore into an alternate data directory inside the etcd pod. `etcdctl snapshot restore` creates the `--data-dir` automatically — no shell or mkdir needed:
 
 ```bash
-kubectl -n kube-system exec "$ETCD_POD" -- sh -c '
-rm -rf /var/lib/etcd-restore-check
-ETCDCTL_API=3 etcdctl snapshot restore /var/lib/etcd-backups/snapshot.db \
+kubectl -n kube-system exec "$ETCD_POD" -- etcdctl \
+  snapshot restore /var/lib/etcd/snapshot.db \
   --data-dir=/var/lib/etcd-restore-check
-'
 ```
 
 Confirm restore output directory exists:
 
 ```bash
-kubectl -n kube-system exec "$ETCD_POD" -- ls -la /var/lib/etcd-restore-check | head -20
+kubectl -n kube-system exec "$ETCD_POD" -- etcdctl \
+  snapshot status /var/lib/etcd-restore-check/member/snap/db -w table
 ```
 
 This proves your snapshot can be restored and is not corrupt.
@@ -154,25 +148,21 @@ This proves your snapshot can be restored and is not corrupt.
 Run a known-bad command to understand failure signatures:
 
 ```bash
-kubectl -n kube-system exec "$ETCD_POD" -- sh -c '
-ETCDCTL_API=3 etcdctl \
+kubectl -n kube-system exec "$ETCD_POD" -- etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/tmp/does-not-exist.crt \
-  snapshot status /var/lib/etcd-backups/snapshot.db
-'
+  snapshot status /var/lib/etcd/snapshot.db
 ```
 
 Now run with the wrong cert/key pair (peer cert instead of server cert):
 
 ```bash
-kubectl -n kube-system exec "$ETCD_POD" -- sh -c '
-ETCDCTL_API=3 etcdctl \
+kubectl -n kube-system exec "$ETCD_POD" -- etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/peer.crt \
   --key=/etc/kubernetes/pki/etcd/peer.key \
-  snapshot status /var/lib/etcd-backups/snapshot.db
-' || true
+  snapshot status /var/lib/etcd/snapshot.db || true
 ```
 
 Capture both error messages and write down:
@@ -213,9 +203,10 @@ You are done when:
 
 ```bash
 kubectl delete namespace etcd-lab
-kubectl -n kube-system exec "$ETCD_POD" -- rm -rf /var/lib/etcd-backups /var/lib/etcd-restore-check
 rm -rf ./artifacts
 ```
+
+> The snapshot and restore-check directories live inside the etcd container's ephemeral filesystem. They are gone when the pod is replaced or the kind cluster is deleted — no in-pod cleanup needed.
 
 ---
 
