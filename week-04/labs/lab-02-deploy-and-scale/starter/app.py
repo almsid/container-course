@@ -5,12 +5,14 @@ import socket
 app = Flask(__name__)
 
 # Configurable via environment variable
-GREETING = os.environ.get("GREETING", "Hello")
+GREETING = os.environ.get("GREETING", "Hello there!")
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+
 # TODO: Replace "YOUR_NAME_HERE" with your actual name!
-STUDENT_NAME = os.environ.get("STUDENT_NAME", "YOUR_NAME_HERE")
+STUDENT_NAME = os.environ.get("STUDENT_NAME", "Mohammad Siddiqi")
+
 # TODO: Replace with your GitHub username
-GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "YOUR_GITHUB_USERNAME")
+GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "almsid")
 APP_VERSION = os.environ.get("APP_VERSION", "v4")
 
 # Kubernetes Downward API fields (injected by the Deployment manifest)
