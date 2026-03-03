@@ -192,7 +192,7 @@ The app references a `vault-token` secret for its Vault integration. Vault is no
 
 ```bash
 kubectl create secret generic vault-token \
-  --from-literal=token=placeholder \
+  --from-literal=token=root \
   -n portfolio
 ```
 
